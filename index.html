@@ -3,45 +3,227 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>House Expense Splitter</title>
+<title>Project H16 - Expense Manager</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#007bff">
 <style>
-body { font-family: Arial, sans-serif; background:#f4f6f8; margin:0; padding:16px; }
-.container { max-width:420px; margin:auto; background:white; padding:16px; border-radius:12px; }
-.item { display:flex; justify-content:space-between; padding:6px 0; }
-.positive{color:green;} .negative{color:red;}
-input,select,button{width:100%;padding:10px;margin-top:6px;}
+body{font-family:Arial,sans-serif;margin:0;padding:16px;background:#f4f6f8}
+.container{max-width:480px;margin:auto;background:white;padding:16px;border-radius:12px}
+h2{text-align:center}
+label{display:block;margin-top:10px;font-size:14px}
+input,select,button{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #ccc;font-size:14px}
+button{background:#007bff;color:white;border:none;margin-top:12px}
+button:hover{background:#0056b3}
+.item{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eee}
+.positive{color:green}.negative{color:red}
+.tab{display:none}
+.tab.active{display:block}
+nav button{margin:2px}
 </style>
 </head>
 <body>
+
 <div class="container">
-<h2>House Expense Splitter</h2>
-<select id="paidBy"><option>A</option><option>B</option><option>C</option><option>D</option></select>
-<input type="number" id="amount" placeholder="Amount">
-<button onclick="addExpense()">Add Expense</button>
-<div id="expenses"></div>
-<div id="balances"></div>
+<h2>Project H16 Expense Manager</h2>
+
+<!-- Login Tab -->
+<div id="loginTab" class="tab active">
+<label>Select User / Admin</label>
+<select id="userSelect"></select>
+<button onclick="login()">Login</button>
 </div>
+
+<!-- Dashboard -->
+<div id="dashboardTab" class="tab">
+<h3>Dashboard</h3>
+<div id="balances"></div>
+
+<h4>Add Payment / Expense</h4>
+<label>Amount</label>
+<input type="number" id="amount">
+<label>Recipient</label>
+<select id="recipientSelect"></select>
+<label>Category</label>
+<input type="text" id="category" placeholder="e.g., groceries">
+<label>Upload Receipt</label>
+<input type="file" id="receipt">
+<button onclick="addPaymentRequest()">Submit Payment Request</button>
+
+<h4>Pending Requests</h4>
+<div id="pendingRequests"></div>
+
+<!-- Admin Panel -->
+<div id="adminPanel" style="margin-top:20px;">
+<h4>Admin Panel - User Management</h4>
+<label>New User Name</label>
+<input type="text" id="newUserName" placeholder="Enter name">
+<label>Role</label>
+<select id="newUserRole">
+<option value="user">User</option>
+<option value="admin">Admin</option>
+</select>
+<button onclick="createUser()">Add User</button>
+
+<h4>Pending Payment Approvals</h4>
+<div id="adminRequests"></div>
+</div>
+
+<button onclick="logout()">Logout</button>
+</div>
+
+</div>
+
 <script>
-const users=["A","B","C","D"]; let expenses=[];
-function addExpense(){
- const p=document.getElementById("paidBy").value;
- const a=parseFloat(document.getElementById("amount").value);
- if(!a)return; expenses.push({p,a}); render();
+// Data
+let users = [{"id":1,"name":"Alice","role":"admin"}];
+let expenses = [];
+let paymentRequests = [];
+let currentUser = null;
+
+// LocalStorage functions
+function saveData(){
+    localStorage.setItem("users", JSON.stringify(users));
+    localStorage.setItem("expenses", JSON.stringify(expenses));
+    localStorage.setItem("paymentRequests", JSON.stringify(paymentRequests));
 }
-function render(){
- let total=expenses.reduce((s,e)=>s+e.a,0);
- let share=total/users.length;
- let paid={A:0,B:0,C:0,D:0};
- expenses.forEach(e=>paid[e.p]+=e.a);
- document.getElementById("expenses").innerHTML=expenses.map(e=>`${e.p}: ${e.a}`).join("<br>");
- document.getElementById("balances").innerHTML=users.map(u=>{
-  let b=(paid[u]-share).toFixed(2);
-  return `<div class='item ${b>=0?"positive":"negative"}'>${u}: ${b}</div>`;
- }).join("");
+function loadData(){
+    users = JSON.parse(localStorage.getItem("users") || "[]");
+    expenses = JSON.parse(localStorage.getItem("expenses") || "[]");
+    paymentRequests = JSON.parse(localStorage.getItem("paymentRequests") || "[]");
 }
-if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js");}
+
+// Populate login
+function populateLogin(){
+    const sel = document.getElementById("userSelect");
+    sel.innerHTML = "";
+    users.forEach(u => {
+        let opt = document.createElement("option");
+        opt.value = u.id;
+        opt.text = u.name;
+        sel.add(opt);
+    });
+}
+
+// Populate recipients
+function populateRecipients(){
+    const sel = document.getElementById("recipientSelect");
+    sel.innerHTML = "";
+    users.filter(u => u.id !== currentUser.id).forEach(u => {
+        let opt = document.createElement("option");
+        opt.value = u.id;
+        opt.text = u.name;
+        sel.add(opt);
+    });
+}
+
+// Login
+function login(){
+    let id = parseInt(document.getElementById("userSelect").value);
+    currentUser = users.find(u => u.id === id);
+    document.getElementById("loginTab").classList.remove("active");
+    document.getElementById("dashboardTab").classList.add("active");
+    populateRecipients();
+    renderBalances();
+    renderPendingRequests();
+    renderAdminRequests();
+    if(currentUser.role !== "admin"){
+        document.getElementById("adminPanel").style.display="none";
+    }
+}
+
+// Logout
+function logout(){
+    currentUser = null;
+    document.getElementById("loginTab").classList.add("active");
+    document.getElementById("dashboardTab").classList.remove("active");
+}
+
+// Create user (admin)
+function createUser(){
+    let name = document.getElementById("newUserName").value;
+    let role = document.getElementById("newUserRole").value;
+    if(!name) return;
+    let newId = users.length ? Math.max(...users.map(u=>u.id)) + 1 : 1;
+    users.push({id:newId,name,role});
+    saveData();
+    populateLogin();
+    document.getElementById("newUserName").value = "";
+}
+
+// Add payment request
+function addPaymentRequest(){
+    let amt = parseFloat(document.getElementById("amount").value);
+    let rec = parseInt(document.getElementById("recipientSelect").value);
+    let cat = document.getElementById("category").value;
+    if(!amt || !rec || !cat) return;
+    let file = document.getElementById("receipt").files[0];
+    let reader = new FileReader();
+    reader.onload = function(e){
+        let receipt = e.target.result;
+        let newId = paymentRequests.length ? Math.max(...paymentRequests.map(r=>r.id))+1 : 1;
+        paymentRequests.push({id:newId,from:currentUser.id,to:rec,amount:amt,category:cat,status:"pending",receipt:receipt});
+        saveData(); renderPendingRequests(); renderAdminRequests(); renderBalances();
+        document.getElementById("amount").value=""; document.getElementById("category").value=""; document.getElementById("receipt").value="";
+    }
+    if(file){ reader.readAsDataURL(file); } else { reader.onload({target:{result:null}}); }
+}
+
+// Render balances
+function renderBalances(){
+    let balances = {};
+    users.forEach(u=>balances[u.id]=0);
+    expenses.forEach(e=>{
+        let share = e.amount/users.length;
+        balances[e.paidBy] += e.amount;
+        users.forEach(u=>balances[u.id]-=share);
+    });
+    paymentRequests.filter(r=>r.status==="approved").forEach(r=>{
+        balances[r.from]-=r.amount;
+        balances[r.to]+=r.amount;
+    });
+    let html = "";
+    users.forEach(u=>{
+        let val = balances[u.id].toFixed(2);
+        html += `<div class='item ${val>=0?"positive":"negative"}'>${u.name}: ${val}</div>`;
+    });
+    document.getElementById("balances").innerHTML = html;
+}
+
+// Render pending requests
+function renderPendingRequests(){
+    let html="";
+    paymentRequests.filter(r=>r.from===currentUser.id).forEach(r=>{
+        html+=`<div class='item'>To: ${users.find(u=>u.id===r.to).name}, Amount: ${r.amount}, Status: ${r.status}</div>`;
+    });
+    document.getElementById("pendingRequests").innerHTML=html;
+}
+
+// Render admin approval requests
+function renderAdminRequests(){
+    if(currentUser.role!=="admin") return;
+    let html="";
+    paymentRequests.filter(r=>r.status==="pending").forEach(r=>{
+        let from=users.find(u=>u.id===r.from).name;
+        let to=users.find(u=>u.id===r.to).name;
+        let rec=r.receipt?`<a href='${r.receipt}' target='_blank'>View</a>`:"No receipt";
+        html+=`<div class='item'>From: ${from}, To: ${to}, Amount: ${r.amount}, ${rec} 
+        <button onclick='approve(${r.id})'>Approve</button> 
+        <button onclick='reject(${r.id})'>Reject</button></div>`;
+    });
+    document.getElementById("adminRequests").innerHTML=html;
+}
+
+// Approve / Reject
+function approve(id){ let req=paymentRequests.find(r=>r.id===id); if(req){req.status="approved"; saveData(); renderPendingRequests(); renderAdminRequests(); renderBalances();} }
+function reject(id){ let req=paymentRequests.find(r=>r.id===id); if(req){req.status="rejected"; saveData(); renderPendingRequests(); renderAdminRequests(); renderBalances();} }
+
+// Initialize
+loadData();
+populateLogin();
+
+// Register service worker
+if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js"); }
 </script>
+
 </body>
 </html>
