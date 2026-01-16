@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>House Expense Splitter</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#007bff">
+<style>
+body { font-family: Arial, sans-serif; background:#f4f6f8; margin:0; padding:16px; }
+.container { max-width:420px; margin:auto; background:white; padding:16px; border-radius:12px; }
+.item { display:flex; justify-content:space-between; padding:6px 0; }
+.positive{color:green;} .negative{color:red;}
+input,select,button{width:100%;padding:10px;margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="container">
+<h2>House Expense Splitter</h2>
+<select id="paidBy"><option>A</option><option>B</option><option>C</option><option>D</option></select>
+<input type="number" id="amount" placeholder="Amount">
+<button onclick="addExpense()">Add Expense</button>
+<div id="expenses"></div>
+<div id="balances"></div>
+</div>
+<script>
+const users=["A","B","C","D"]; let expenses=[];
+function addExpense(){
+ const p=document.getElementById("paidBy").value;
+ const a=parseFloat(document.getElementById("amount").value);
+ if(!a)return; expenses.push({p,a}); render();
+}
+function render(){
+ let total=expenses.reduce((s,e)=>s+e.a,0);
+ let share=total/users.length;
+ let paid={A:0,B:0,C:0,D:0};
+ expenses.forEach(e=>paid[e.p]+=e.a);
+ document.getElementById("expenses").innerHTML=expenses.map(e=>`${e.p}: ${e.a}`).join("<br>");
+ document.getElementById("balances").innerHTML=users.map(u=>{
+  let b=(paid[u]-share).toFixed(2);
+  return `<div class='item ${b>=0?"positive":"negative"}'>${u}: ${b}</div>`;
+ }).join("");
+}
+if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js");}
+</script>
+</body>
+</html>
